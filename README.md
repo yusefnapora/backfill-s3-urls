@@ -14,15 +14,21 @@ Create a file called `.env` that looks like this, filling in the values:
 
 ```
 RO_DATABASE_CONNECTION=<connection-uri-for-readonly-postgres>
+DATABASE_CONNEcTION=<connection-uri-for-db-to-update>
+
 S3_ACCESS_KEY_ID=<your-aws-key-id>
 S3_SECRET_ACCESS_KEY=><your-aws-key>
 S3_BUCKET_NAME=dotstorage-prod-0
 S3_REGION=us-east-2
 ```
 
-### Dumping the backup urls
 
-Use the `get-urls` command in `index.js` to query the database for uploads that may be missing backup urls.
+Backfilling is a two-step process. 
+
+### Step one: Dumping the backup urls
+
+In step one, the `get-urls` command connects to a read-only DB replica to find "candidate" uploads that might need backfilling.
+It then constructs the object prefix for each candidate's backups on S3 and lists CAR files matching the prefix.
 
 For each candidate upload, we construct the expected S3 object prefix and query for CAR files. If there's more than one, we record the upload id and backup urls in a big newline-delimited JSON file.
 
@@ -34,8 +40,16 @@ node ./index.js get-urls
 
 You can also set the start and end dates, and control where the json file will be written. Use `node ./index.js get-urls --help` for options.
 
-### Writing the urls to the database
+At the end, you should have a file named `backfill-${startDate}-${endDate}.db` in your current directory.
 
-TBD / in progress.
+### Step two: Writing the urls to the database
 
-The plan is to partition the big ndjson file from `get-urls` into small batches and update the db slowly over time, to avoid putting undue load on the production DB or locking the uploads table.
+Once you've run `get-urls`, you can run the `update-urls` command to update the nft.storage DB with the urls discovered in step one.
+
+Example:
+
+```
+node ./index.js update-urls --stateDB=<path-to-state-db-file-from-step-one>
+```
+
+The urls will be updated in batches, with a sleep interval between batches. Use `node ./index.js update-urls --help` for options.
