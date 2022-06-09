@@ -13,7 +13,7 @@ import { BackfillState } from './state.js'
     const startDate = new Date(opts.startDate)
     const endDate = new Date(opts.endDate)
 
-    const state = await BackfillState.open({ filename: stateDB })
+    const state = await BackfillState.open({ filename: opts.stateDB })
   
     console.log('Querying db for affected uploads...')
     const uploads = await findUploadsWithMissingURLS(context, startDate, endDate)

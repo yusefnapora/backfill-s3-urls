@@ -48,8 +48,9 @@ export class BackfillState {
         // all discovered backup urls for each candidate id
         await db.run(
             `CREATE TABLE IF NOT EXISTS url (
-                FOREIGN KEY(candidate_id) REFERENCES candidates(id),
-                url TEXT
+                candidate_id INTEGER,
+                url TEXT,
+                FOREIGN KEY(candidate_id) REFERENCES candidates(id)
             )`
         ) 
     }
