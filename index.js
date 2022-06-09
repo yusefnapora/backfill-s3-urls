@@ -2,8 +2,8 @@
 import sade from 'sade'
 import dotenv from 'dotenv'
 
-import { getAllBackupUrls } from './url-get'
-import { updateBackupUrls } from './url-put'
+import { getAllBackupUrls } from './url-get.js'
+import { updateBackupUrls } from './url-put.js'
 
 dotenv.config()
 

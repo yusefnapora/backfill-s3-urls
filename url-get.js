@@ -1,7 +1,7 @@
 import { ListObjectsV2Command } from '@aws-sdk/client-s3'
 
-import { getReadContext } from './context'
-import { BackfillState } from './state'
+import { getReadContext } from './context.js'
+import { BackfillState } from './state.js'
 
 /**
  * 
