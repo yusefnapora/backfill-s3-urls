@@ -1,11 +1,11 @@
-import { ListObjectsV2Command } from '@aws-sdk/client-s3'
+import { InputSerialization, ListObjectsV2Command } from '@aws-sdk/client-s3'
 
 import { getReadContext } from './context.js'
 import { BackfillState } from './state.js'
 
 /**
  * 
- * @param {{ stateDB?: string|null, startDate: string, endDate: string }} opts 
+ * @param {{ stateDB?: string|null, startDate: string, endDate: string, skipDBQuery?: boolean }} opts 
  */
  export async function getAllBackupUrls(opts) {
     const context = await getReadContext()
@@ -13,22 +13,28 @@ import { BackfillState } from './state.js'
     const startDate = new Date(opts.startDate)
     const endDate = new Date(opts.endDate)
 
-    const filename = opts.stateDB || `./backfill-${startDate.toISOString()}-${endDate.toISOString()}.db`
+    const filename = opts.stateDB || `./backfill_${startDate.toISOString()}_${endDate.toISOString()}.db`
     const state = await BackfillState.open({ filename })
-  
-    console.log('Querying db for affected uploads...')
-    const uploads = await findUploadsWithMissingURLS(context, startDate, endDate)
-    console.log(`Found ${uploads.length} uploads to check.`)
+    console.log('recording state to db at ' + filename)
 
-    for (const u of uploads) {
-        await state.addCandidate(u)
+    if (!opts.skipDBQuery) {
+      console.log('Querying db for affected uploads...')
+      const uploads = await findUploadsWithMissingURLS(context, startDate, endDate)
+      console.log(`Found ${uploads.length} candidate uploads to check.`)
+
+      await state.addCandidates(uploads)
+      console.log('recorded candidate uploads to state db')
     }
 
     let numChecked = 0
     const logFreq = 1000
 
-    console.log('recording backup urls to state db at ' + state.filename)
     console.log('checking s3 to discover backup urls...')
+    const counts = await state.getCandidateCounts()
+    console.log(`total: ${counts.total}`)
+    console.log(`checked on s3: ${counts.checkedS3}`)
+    console.log(`completed: ${counts.backfilled}`)
+
     const unchecked = await state.getUncheckedCandidates()
     for (const upload of unchecked) {
       const urls = await getBackupURLsFromS3(
@@ -40,7 +46,7 @@ import { BackfillState } from './state.js'
       numChecked += 1
   
       if ((numChecked % logFreq) == 0) {
-        console.log(`checked ${numChecked} / ${uploads.length}`)
+        console.log(`checked ${numChecked} / ${unchecked.length}`)
       }
     }
 

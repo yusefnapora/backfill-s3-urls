@@ -61,22 +61,19 @@ export class BackfillState {
 
     /**
      * Add a candidate entry to the tracking db.
-     * @param {CandidateUpload} candidate 
+     * @param {CandidateUpload[]} candidate 
      */
-    async addCandidate(candidate) {
-        const {
-            id: uploadId,
-            source_cid: sourceCid,
-            user_id: userId
-        } = candidate
+    async addCandidates(candidates) {
+        const batchSize = 300
+        const queryBase = 'INSERT INTO candidate (id, source_cid, user_id) VALUES '
 
-        await this.db.run(
-            `INSERT INTO candidate (id, source_cid, user_id) 
-             VALUES (?, ?, ?)`, 
-            uploadId, 
-            sourceCid, 
-            userId
-        )
+        for (let i = 0; i < candidates.length; i += batchSize) {
+            const batch = candidates.slice(i, i+batchSize)
+
+            const placeholders = batch.map(() => `(?, ?, ?)`).join(', ')
+            const values = batch.flatMap(({ id, source_cid, user_id }) => [id, source_cid, user_id])
+            await this.db.run(queryBase + placeholders, ...values)
+        }
     }
 
     /**
@@ -137,7 +134,7 @@ export class BackfillState {
             `SELECT id, source_cid, user_id 
              FROM candidate
              WHERE checked_s3_at IS NULL`)
-        return rows.map(([id, source_cid, user_id]) => ({
+        return rows.map(({id, source_cid, user_id}) => ({
             id,
             source_cid,
             user_id,
@@ -153,7 +150,7 @@ export class BackfillState {
              LIMIT ?`,
              limit
         )
-        return rows.map(([id, source_cid, user_id, checked_s3_at]) => ({
+        return rows.map(({id, source_cid, user_id, checked_s3_at}) => ({
             id,
             source_cid,
             user_id,
@@ -181,9 +178,10 @@ export class BackfillState {
      * @returns {Promise<{ total: number, checkedS3: number, backfilled: number }>} the number of candidate entries
      */
     async getCandidateCounts() {
-        const [total] = await this.db.get(`SELECT COUNT(id) from candidate`)
-        const [checkedS3] = await this.db.get(`SELECT COUNT(id) FROM candidate WHERE checked_s3_at IS NOT NULL`)
-        const [backfilled] = await this.db.get(`SELECT COUNT(id) FROM candidate WHERE backfilled_at IS NOT NULL`)
+        const { total } = await this.db.get(`SELECT COUNT(id) as total from candidate`)
+        const { checkedS3 } = await this.db.get(`SELECT COUNT(id) as checkedS3 FROM candidate WHERE checked_s3_at IS NOT NULL`)
+        const { backfilled } = await this.db.get(`SELECT COUNT(id) as backfilled FROM candidate WHERE backfilled_at IS NOT NULL`)
+
         return { total, checkedS3, backfilled }
     }
 }

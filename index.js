@@ -19,6 +19,7 @@ prog
   .command('get-urls')
     .option('startDate', 'start date of query. must be parseable by `new Date()`', '2022-03-17')
     .option('endDate', 'end date of query. must be parseable by `new Date()`', '2022-06-05')
+    .option('skipDBQuery', 'skip querying for candidates (only useful if re-using stateDB from prior run', false)
     .option(
       'stateDB', 
       'path to local state database that records intermediate data and backfill progress. ' +
