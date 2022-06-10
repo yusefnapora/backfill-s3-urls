@@ -9,14 +9,14 @@ import { getUpdateContext } from './context.js'
  */
 export async function updateBackupUrls({ stateDB, requestsPerSecond }) {
     const state = (typeof stateDB === 'string') 
-      ? await BackfillState.open(stateDB)
+      ? new BackfillState(stateDB)
       : stateDB
       
     const { db } = await getUpdateContext()
 
     const throttle = throttledQueue(requestsPerSecond, 1000)
 
-    const { total, checkedS3, backfilled } = await state.getCandidateCounts()
+    const { total, checkedS3, backfilled } = state.getCandidateCounts()
 
     if (total === 0) {
         throw new Error('state db contains no candidates to update. run get-urls first and set the --stateDB flag to the generated .db file')
@@ -30,18 +30,18 @@ export async function updateBackupUrls({ stateDB, requestsPerSecond }) {
     while (remaining > 0) {
         console.log(`backfilling ${batchSize} / ${total} uploads. remaining: ${remaining}`)
 
-        const candidates = await state.getBackfillableCandidates({ limit: batchSize })
+        const candidates = state.getBackfillableCandidates({ limit: batchSize })
         for (const c of candidates) {
-            const urls = await state.getDiscoveredUrls(c.id)
+            const urls = state.getDiscoveredUrls(c.id)
             await throttle(() => updateUrlsForUpload(db, c.id, urls))
-            await state.markBackfilled(c.id)
+            state.markBackfilled(c.id)
         }
 
         remaining -= candidates.length
     }
 
     console.log('backfill complete')
-    await state.close()
+    state.close()
 }
 
 /**
