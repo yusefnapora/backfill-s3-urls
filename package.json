@@ -5,7 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "ava"
   },
   "author": "",
   "license": "ISC",
@@ -17,5 +17,9 @@
     "promised-sqlite3": "^1.2.0",
     "sade": "^1.8.1",
     "throttled-queue": "^2.1.4"
+  },
+  "devDependencies": {
+    "ava": "^4.3.0",
+    "testcontainers": "^8.10.1"
   }
 }

@@ -5,10 +5,13 @@ import { getUpdateContext } from './context.js'
 
 /**
  * 
- * @param {{ stateDB: string, requestsPerSecond: number }} options 
+ * @param {{ stateDB: string|BackfillState, requestsPerSecond: number }} options 
  */
 export async function updateBackupUrls({ stateDB, requestsPerSecond }) {
-    const state = await BackfillState.open(stateDB)
+    const state = (typeof stateDB === 'string') 
+      ? await BackfillState.open(stateDB)
+      : stateDB
+      
     const { db } = await getUpdateContext()
 
     const throttle = throttledQueue(requestsPerSecond, 1000)
