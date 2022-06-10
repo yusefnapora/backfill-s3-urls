@@ -1,13 +1,17 @@
+import throttledQueue from 'throttled-queue'
+
 import { BackfillState } from './state.js'
 import { getUpdateContext } from './context.js'
 
 /**
  * 
- * @param {{ stateDB: string, batchSize: number, interval: number }} options 
+ * @param {{ stateDB: string, requestsPerSecond: number }} options 
  */
-export async function updateBackupUrls({ stateDB, batchSize, interval }) {
+export async function updateBackupUrls({ stateDB, requestsPerSecond }) {
     const state = await BackfillState.open(stateDB)
     const { db } = await getUpdateContext()
+
+    const throttle = throttledQueue(requestsPerSecond, 1000)
 
     const { total, checkedS3, backfilled } = await state.getCandidateCounts()
 
@@ -26,14 +30,11 @@ export async function updateBackupUrls({ stateDB, batchSize, interval }) {
         const candidates = await state.getBackfillableCandidates({ limit: batchSize })
         for (const c of candidates) {
             const urls = await state.getDiscoveredUrls(c.id)
-            await updateUrlsForUpload(db, c.id, urls)
+            await throttle(() => updateUrlsForUpload(db, c.id, urls))
             await state.markBackfilled(c.id)
         }
 
         remaining -= candidates.length
-
-        console.log(`batch complete. delaying ${interval} sec`)
-        await new Promise((resolve) => setTimeout(resolve, interval * 1000))
     }
 
     console.log('backfill complete')

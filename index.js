@@ -14,6 +14,8 @@ dotenv.config()
  * a bug was causing us to only keep one backup url for chunked CAR uploads.
  */
 
+ const DEFAULT_RATE_LIMIT_RPS = 30
+
 const prog = sade('backfill-s3-urls')
 prog
   .command('get-urls')
@@ -29,8 +31,7 @@ prog
 
   .command('update-urls')
     .option('stateDB', 'path to state DB file produced by get-urls')
-    .option('batchSize', 'number of uploads to update in each batch', 300)
-    .option('interval', 'time (in seconds) to wait between batches', 10)
+    .option('requestsPerSecond', 'max number of db update requests to send per second', DEFAULT_RATE_LIMIT_RPS)
     .action(updateBackupUrls)
 
 prog.parse(process.argv)
