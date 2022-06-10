@@ -30,7 +30,10 @@ Backfilling is a two-step process.
 In step one, the `get-urls` command connects to a read-only DB replica to find "candidate" uploads that might need backfilling.
 It then constructs the object prefix for each candidate's backups on S3 and lists CAR files matching the prefix.
 
-For each candidate upload, we construct the expected S3 object prefix and query for CAR files. If there's more than one, we record the upload id and backup urls in a big newline-delimited JSON file.
+For each candidate upload, we construct the expected S3 object prefix and query for CAR files.
+
+The upload ids and discovered urls are recorded to a sqlite "state db" file, which gets passed in to the `put-urls` command
+in step 2.
 
 Example:
 
@@ -38,7 +41,7 @@ Example:
 node ./index.js get-urls
 ```
 
-You can also set the start and end dates, and control where the json file will be written. Use `node ./index.js get-urls --help` for options.
+You can also set the start and end dates, and control where the state db file will be written. Use `node ./index.js get-urls --help` for options.
 
 At the end, you should have a file named `backfill-${startDate}-${endDate}.db` in your current directory.
 
