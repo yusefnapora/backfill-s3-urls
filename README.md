@@ -14,7 +14,7 @@ Create a file called `.env` that looks like this, filling in the values:
 
 ```
 RO_DATABASE_CONNECTION=<connection-uri-for-readonly-postgres>
-DATABASE_CONNEcTION=<connection-uri-for-db-to-update>
+DATABASE_CONNECTION=<connection-uri-for-db-to-update>
 
 S3_ACCESS_KEY_ID=<your-aws-key-id>
 S3_SECRET_ACCESS_KEY=><your-aws-key>
