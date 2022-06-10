@@ -13,18 +13,18 @@ export async function updateBackupUrls({ stateDB, requestsPerSecond }) {
       : stateDB
       
     const { db } = await getUpdateContext()
-
     const throttle = throttledQueue(requestsPerSecond, 1000)
-
     const { total, checkedS3, backfilled } = state.getCandidateCounts()
 
     if (total === 0) {
+        await db.end()
         throw new Error('state db contains no candidates to update. run get-urls first and set the --stateDB flag to the generated .db file')
     }
 
     if (total !== checkedS3) {
         console.warn(`⚠️ ${total - checkedS3} entries have not yet been checked on s3`)
     }
+
 
     let remaining = total - backfilled
     while (remaining > 0) {

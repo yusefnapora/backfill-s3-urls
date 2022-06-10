@@ -7,39 +7,39 @@ import { BackfillState } from '../state.js'
 import { initDBSchema } from './db-helpers.js'
 
 
-// let dbContainer
-// let dbClient
+let dbContainer
+let connectionString
 
+test.before(async (t) => {
+    t.timeout(60 * 1000, 'wait for db container to start')
 
-// test.before(async (t) => {
-//     t.timeout(60 * 1000, 'wait for db container to start')
+    console.log('starting database container....')
+    dbContainer = await new PostgreSqlContainer().start()
+    const host = dbContainer.getHost()
+    const port = dbContainer.getPort()
+    const database = dbContainer.getDatabase()
+    const user = dbContainer.getUsername()
+    const password = dbContainer.getPassword()
+    connectionString = `postgres://${user}:${password}@${host}:${port}/${database}`
+    process.env.DATABASE_CONNECTION = connectionString
 
-//     dbContainer = await new PostgreSqlContainer().start()
-//     dbClient = new pg.Client({
-//         host: dbContainer.getHost(),
-//         port: dbContainer.getPort(),
-//         database: dbContainer.getDatabase(),
-//         user: dbContainer.getUsername(),
-//         password: dbContainer.getPassword(),
-//     })
-//     await dbClient.connect()
-// })
+    console.log('database container running')
+})
 
-// test.beforeEach(async () => {
-//     await initDBSchema(dbClient)
-// })
+test.beforeEach(async () => {
+    const dbClient = new pg.Client({connectionString})
+    await dbClient.connect()
+    await initDBSchema(dbClient)
+    await dbClient.end()
+})
 
-// test.after(async (t) => {
-//     await dbClient.end()
-//     await dbContainer.stop()
-// })
+test.after(async (t) => {
+    await dbContainer.stop()
+})
 
 
 
 test('it should fail if there are no candidates in the state db', async (t) => {
-    const stateDB = await BackfillState.open({ filename: '/tmp/fixme-tmpfile.foo' })
-
-    t.throws(async () => {
-        updateBackupUrls({ stateDB })
-    })
+    const stateDB = new BackfillState(':memory:')
+    await t.throwsAsync(updateBackupUrls({ stateDB }))
 })
