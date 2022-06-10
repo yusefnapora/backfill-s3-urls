@@ -1,4 +1,4 @@
-import { PromisedDatabase } from 'promised-sqlite3'
+import { Database } from 'better-sqlite3'
 
 
 /**
@@ -12,30 +12,18 @@ import { PromisedDatabase } from 'promised-sqlite3'
  */
 
 export class BackfillState {
-    constructor(stateDB, filename) {
-        this.db = stateDB
-        this.filename = filename
-    }
-
-    /**
-     * 
-     * @param {{ filename?: string }} options 
-     * @returns 
-     */
-    static async open({ filename } = {}) {
+    constructor(filename) {
         if (!filename) {
             filename = `./backfill-${new Date().toISOString()}.db`
         }
-        const db = new PromisedDatabase()
-        await db.open(filename)
-        await this._initDB(db)
-        return new BackfillState(db, filename)
+
+        this.db = new Database(filename)
+        this._initDB()
     }
 
-    static async _initDB(db) {
-
+    _initDB() {
         // candidates are uploads that we think may be missing backup_urls.
-        await db.run(
+        this.db.exec(
             `CREATE TABLE IF NOT EXISTS candidate (
                 id INTEGER PRIMARY KEY, -- same as upload.id from nft.storage database
                 source_cid TEXT NOT NULL,
@@ -46,7 +34,7 @@ export class BackfillState {
         )
 
         // all discovered backup urls for each candidate id
-        await db.run(
+        this.db.exec(
             `CREATE TABLE IF NOT EXISTS url (
                 candidate_id INTEGER,
                 url TEXT,
@@ -55,7 +43,7 @@ export class BackfillState {
         ) 
     }
 
-    async close() {
+    close() {
         return this.db.close()
     }
 
@@ -63,7 +51,7 @@ export class BackfillState {
      * Add a candidate entry to the tracking db.
      * @param {CandidateUpload[]} candidate 
      */
-    async addCandidates(candidates) {
+    addCandidates(candidates) {
         const batchSize = 300
         const queryBase = 'INSERT INTO candidate (id, source_cid, user_id) VALUES '
 
@@ -71,8 +59,8 @@ export class BackfillState {
             const batch = candidates.slice(i, i+batchSize)
 
             const placeholders = batch.map(() => `(?, ?, ?)`).join(', ')
-            const values = batch.flatMap(({ id, source_cid, user_id }) => [id, source_cid, user_id])
-            await this.db.run(queryBase + placeholders, ...values)
+            const stmt = this.db.prepare(queryBase + placeholders)
+            stmt.run(...values)
         }
     }
 
@@ -83,25 +71,22 @@ export class BackfillState {
      * @param {string[]} urls 
      * @param {Date} [timestamp] 
      */
-    async addDiscoveredUrls(candidateId, urls, timestamp = undefined) {
+    addDiscoveredUrls(candidateId, urls, timestamp = undefined) {
         if (!timestamp) {
             timestamp = new Date()
         }
+        const insertStmt = this.db.prepare(`INSERT INTO url (candidate_id, url) VALUES (?, ?)`)
         for (const url of urls) {
-            await this.db.run(
-                `INSERT INTO url (candidate_id, url) VALUES (?, ?)`,
-                candidateId,
-                url,
-            )
+            insertStmt.run(candidateId, url)
         }
-        await this.db.run(
+
+        const updateTimestampStmt = this.db.prepare(
             `UPDATE candidate
              SET checked_s3_at = ?
              WHERE id = ?
-            `,
-            timestamp.toISOString(),
-            candidateId
+            `
         )
+        updateTimestampStmt.run(timestamp.toISOString(), candidateId)
     }
 
     /**
@@ -109,78 +94,69 @@ export class BackfillState {
      * @param {number|string} candidateId 
      * @param {Date} [timestamp] 
      */
-    async markBackfilled(candidateId, timestamp = undefined) {
+    markBackfilled(candidateId, timestamp = undefined) {
         if (!timestamp) {
             timestamp = new Date()
         }
 
-        await this.db.run(
+        const stmt = this.db.prepare(
             `UPDATE candidate
              SET backfilled_at = ?
              WHERE id = ?`,
-             timestamp.toISOString(),
-             candidateId,
         )
+
+        stmt.run(timestamp.toISOString(), candidateId)
     }
 
     /**
      * Returns an array of {@link CandidateUpload}s that haven't yet
      * been checked on s3.
      * 
-     * @returns {Promise<CandidateUpload[]>}
+     * @returns {CandidateUpload[]}
      */
-    async getUncheckedCandidates() {
-        const rows = await this.db.all(
+    getUncheckedCandidates() {
+        const stmt = this.db.prepare(
             `SELECT id, source_cid, user_id 
              FROM candidate
-             WHERE checked_s3_at IS NULL`)
-        return rows.map(({id, source_cid, user_id}) => ({
-            id,
-            source_cid,
-            user_id,
-        }))
+             WHERE checked_s3_at IS NULL`
+        )
+        return stmt.all()
     }
 
-    async getBackfillableCandidates({ limit = 100} = {}) {
-        const rows = await this.db.all(
+    getBackfillableCandidates({ limit = 100} = {}) {
+        const stmt = this.db.prepare(
             `SELECT id, source_cid, user_id, checked_s3_at
              FROM candidate
              WHERE checked_s3_at IS NOT NULL
              AND backfilled_at IS NULL
-             LIMIT ?`,
-             limit
+             LIMIT ?`
         )
-        return rows.map(({id, source_cid, user_id, checked_s3_at}) => ({
-            id,
-            source_cid,
-            user_id,
-            checked_s3_at,
-        }))
+        return stmt.all(limit)
     }
 
     /**
      * Returns all discovered backup urls for the given candidate id.
      * 
      * @param {number|string} candidateId 
-     * @returns {Promise<string[]>}
+     * @returns {string[]}
      */
-    async getDiscoveredUrls(candidateId) {
-        const rows = await this.db.all(
+    getDiscoveredUrls(candidateId) {
+        const stmt = this.db.prepare(
             `SELECT url
              FROM url
-             WHERE candidate_id = ?`,
-             candidateId
+             WHERE candidate_id = ?`
         )
-        return rows.map((row) => row[0])
+        const rows = stmt.all(candidateId)
+        return rows.map((row) => row.url)
     }
 
     /**
      * @returns {Promise<{ total: number, checkedS3: number, backfilled: number }>} the number of candidate entries
      */
-    async getCandidateCounts() {
-        const { total } = await this.db.get(`SELECT COUNT(id) as total from candidate`)
-        const { checkedS3 } = await this.db.get(`SELECT COUNT(id) as checkedS3 FROM candidate WHERE checked_s3_at IS NOT NULL`)
-        const { backfilled } = await this.db.get(`SELECT COUNT(id) as backfilled FROM candidate WHERE backfilled_at IS NOT NULL`)
+    getCandidateCounts() {
+        const { total } = this.db.prepare(`SELECT COUNT(id) as total from candidate`).get()
+        const { checkedS3 } = this.db.prepare(`SELECT COUNT(id) as checkedS3 FROM candidate WHERE checked_s3_at IS NOT NULL`).get()
+        const { backfilled } = this.db.prepare(`SELECT COUNT(id) as backfilled FROM candidate WHERE backfilled_at IS NOT NULL`).get()
 
         return { total, checkedS3, backfilled }
     }

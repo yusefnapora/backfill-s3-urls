@@ -14,7 +14,7 @@ import { BackfillState } from './state.js'
     const endDate = new Date(opts.endDate)
 
     const filename = opts.stateDB || `./backfill_${startDate.toISOString()}_${endDate.toISOString()}.db`
-    const state = await BackfillState.open({ filename })
+    const state = new BackfillState({ filename })
     console.log('recording state to db at ' + filename)
 
     if (!opts.skipDBQuery) {
@@ -22,7 +22,7 @@ import { BackfillState } from './state.js'
       const uploads = await findUploadsWithMissingURLS(context, startDate, endDate)
       console.log(`Found ${uploads.length} candidate uploads to check.`)
 
-      await state.addCandidates(uploads)
+      state.addCandidates(uploads)
       console.log('recorded candidate uploads to state db')
     }
 
@@ -30,19 +30,19 @@ import { BackfillState } from './state.js'
     const logFreq = 1000
 
     console.log('checking s3 to discover backup urls...')
-    const counts = await state.getCandidateCounts()
+    const counts = state.getCandidateCounts()
     console.log(`total: ${counts.total}`)
     console.log(`checked on s3: ${counts.checkedS3}`)
     console.log(`completed: ${counts.backfilled}`)
 
-    const unchecked = await state.getUncheckedCandidates()
+    const unchecked = state.getUncheckedCandidates()
     for (const upload of unchecked) {
       const urls = await getBackupURLsFromS3(
         context,
         upload.source_cid,
         upload.user_id
       )
-      await state.addDiscoveredUrls(upload.id, urls)
+      state.addDiscoveredUrls(upload.id, urls)
       numChecked += 1
   
       if ((numChecked % logFreq) == 0) {
@@ -51,7 +51,7 @@ import { BackfillState } from './state.js'
     }
 
     console.log('Backup URL discovery complete.')
-    await state.close()
+    state.close()
   }
   
   /**
