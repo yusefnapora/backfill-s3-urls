@@ -13,8 +13,8 @@ import Database from 'better-sqlite3'
 
 export class BackfillState {
     constructor(filename) {
-        if (!filename) {
-            filename = `./backfill-${new Date().toISOString()}.db`
+        if (typeof filename !== 'string') {
+            throw new Error('must provide string filename.')
         }
 
         this.db = new Database(filename)
@@ -38,7 +38,7 @@ export class BackfillState {
             `CREATE TABLE IF NOT EXISTS url (
                 candidate_id INTEGER,
                 url TEXT,
-                FOREIGN KEY(candidate_id) REFERENCES candidates(id)
+                FOREIGN KEY(candidate_id) REFERENCES candidate(id)
             )`
         ) 
     }
@@ -68,7 +68,7 @@ export class BackfillState {
      * Update a candidate entry with URLs discovered from s3.
      * 
      * @param {number|string} candidateId 
-     * @param {string[]} urls 
+     * @param {URL[]} urls 
      * @param {Date} [timestamp] 
      */
     addDiscoveredUrls(candidateId, urls, timestamp = undefined) {
@@ -77,7 +77,7 @@ export class BackfillState {
         }
         const insertStmt = this.db.prepare(`INSERT INTO url (candidate_id, url) VALUES (?, ?)`)
         for (const url of urls) {
-            insertStmt.run(candidateId, url)
+            insertStmt.run(candidateId, url.toString())
         }
 
         const updateTimestampStmt = this.db.prepare(

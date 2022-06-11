@@ -14,8 +14,8 @@ import { BackfillState } from './state.js'
     const endDate = new Date(opts.endDate)
 
     const filename = opts.stateDB || `./backfill_${startDate.toISOString()}_${endDate.toISOString()}.db`
-    const state = new BackfillState({ filename })
-    console.log('recording state to db at ' + filename)
+    console.log('state db filename: ', filename)
+    const state = new BackfillState(filename)
 
     if (!opts.skipDBQuery) {
       console.log('Querying db for affected uploads...')
